@@ -1,0 +1,284 @@
+/* =========================
+   1) VARIABLES CSS (THEME)
+   - Definen la paleta y valores reutilizables.
+   - Ventaja: cambias colores una sola vez y se actualiza todo.
+   ========================= */
+:root{
+  --bg:#f4f6f8;        /* color de fondo general (body) */
+  --card:#fff;         /* color de fondo para contenedores tipo tarjeta */
+  --text:#1f2937;      /* color base de texto (gris oscuro) */
+  --muted:#6b7280;     /* texto secundario / apagado */
+
+  --primary:#0b3c5d;   /* color principal (topbar, botones primary) */
+  --line:#e5e7eb;      /* color de bordes / separadores */
+  --radius:14px;         /* radio estándar de esquinas */
+
+  --ok:#166534;        /* verde para estados OK */
+  --warn:#92400e;      /* naranja/amarillo para advertencia */
+  --danger:#991b1b;    /* rojo para peligro/alerta */
+}
+
+/* =========================
+   2) RESET BÁSICO
+   - box-sizing: hace que padding/border no rompan el ancho real.
+   - Ayuda a que los layouts sean más predecibles.
+   ========================= */
+*{ box-sizing:border-box }
+
+/* =========================
+   3) BODY (BASE GLOBAL)
+   - margin:0 quita margen por defecto del navegador
+   - font-family: tipografía moderna y fallback
+   - background y color: aplican el tema global
+   ========================= */
+body{
+  margin:0;
+  font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* =========================
+   4) TOPBAR (HEADER SUPERIOR)
+   - Barra superior con flexbox:
+     - justify-content:space-between separa brand vs nav
+     - flex-wrap:wrap permite que en pantallas pequeñas baje de línea
+   ========================= */
+.topbar{
+  background:var(--primary);
+  color:#fff;
+  padding:12px 16px;
+
+  display:flex;
+  gap:14px;
+  align-items:center;
+  justify-content:space-between;
+
+  flex-wrap:wrap;
+}
+
+/* =========================
+   5) BRAND (LOGO + TITULO)
+   - También usa flexbox para alinear logo + textos.
+   ========================= */
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+/* =========================
+   6) LOGO
+   - Cuadro redondeado (44x44)
+   - display:grid + place-items:center centra el texto perfectamente
+   ========================= */
+.logo{
+  width:44px;
+  height:44px;
+  border-radius:12px;
+  background:#fff;
+  color:var(--primary);
+
+  display:grid;
+  place-items:center;
+
+  font-weight:900;
+}
+
+/* =========================
+   7) TITULOS DEL HEADER
+   - title: fuerte y compacto
+   - subtitle: pequeño y un poco transparente
+   ========================= */
+.title{ font-weight:900; line-height:1 }
+.subtitle{ font-size:12px; opacity:.9 }
+
+/* =========================
+   8) NAV (MENÚ SUPERIOR)
+   - flex con gap para separar links.
+   - flex-wrap para que no se rompa en móvil.
+   ========================= */
+.nav{ display:flex; gap:8px; flex-wrap:wrap }
+
+/* =========================
+   9) LINKS DEL NAV
+   - Estilo tipo "chip" / botón suave
+   - .active: indica sección actual (Tablero o Gestión)
+   ========================= */
+.nav a{
+  color:#fff;
+  text-decoration:none;
+  padding:8px 10px;
+  border-radius:10px;
+  background:rgba(255,255,255,.12);
+}
+.nav a.active{
+  background:rgba(255,255,255,.28);
+}
+
+/* =========================
+   10) LAYOUT PRINCIPAL
+   - Padding general alrededor del contenido
+   ========================= */
+.layout{ padding:14px }
+
+/* =========================
+   11) CARD
+   - Contenedor principal de la SPA (#app)
+   - min-height: asegura que el contenido ocupe casi toda la pantalla
+     (resta altura de header+footer aproximada)
+   ========================= */
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:14px;
+
+  min-height:calc(100vh - 160px);
+}
+
+/* =========================
+   12) FOOTER
+   - Texto centrado y apagado
+   ========================= */
+.footer{
+  padding:14px;
+  text-align:center;
+  color:var(--muted);
+}
+
+/* =========================
+   13) CLASES DE TEXTO (UTILIDADES)
+   - h1/h2: no son tags, son clases (para control visual)
+   - small/muted: texto secundario
+   ========================= */
+.h1{ margin:0 0 10px; font-size:20px; font-weight:900 }
+.h2{ margin:0 0 8px; font-size:13px; font-weight:900; color:var(--muted) }
+.small{ color:var(--muted); font-size:13px; margin:6px 0 0 }
+
+/* =========================
+   14) UTILIDADES DE LAYOUT
+   - .row: flex horizontal con salto a nueva línea si no cabe
+   - .grid: 2 columnas (en pantallas grandes)
+   - media query: en pantallas pequeñas pasa a 1 columna
+   ========================= */
+.row{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+
+@media (max-width: 900px){
+  .grid{ grid-template-columns:1fr }
+}
+
+/* =========================
+   15) INPUTS Y SELECTS
+   - Estilo uniforme para formularios
+   - width:100% para que ocupen la columna completa del grid
+   ========================= */
+.input, select{
+  width:100%;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px 12px;
+  font-size:14px;
+  background:#fff;
+}
+
+/* =========================
+   16) BOTONES
+   - .btn: estilo base
+   - .primary: botón principal (azul)
+   - .danger: botón de acción peligrosa (rojo)
+   ========================= */
+.btn{
+  border:1px solid var(--line);
+  background:#fff;
+  padding:10px 12px;
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:800;
+}
+
+.btn.primary{
+  background:var(--primary);
+  border-color:var(--primary);
+  color:#fff;
+}
+
+.btn.danger{
+  background:var(--danger);
+  border-color:var(--danger);
+  color:#fff;
+}
+
+/* =========================
+   17) TABLAS
+   - border-collapse: elimina espacios entre celdas
+   - overflow:hidden + border-radius: hace que se respeten esquinas redondeadas
+   - hover: resalta fila al pasar el mouse (mejora usabilidad)
+   ========================= */
+.table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  overflow:hidden;
+}
+
+.table th, .table td{
+  padding:10px;
+  border-bottom:1px solid var(--line);
+  text-align:left;
+  font-size:13px;
+}
+
+.table th{
+  background:#f9fafb;
+  color:#374151;
+}
+
+.table tr:hover td{
+  background:#f9fafb;
+}
+
+/* =========================
+   18) PILLS (ETIQUETAS DE ESTADO)
+   - Base: forma redondeada tipo cápsula
+   - Variantes:
+     .ok (verde), .warn (amarillo), .danger (rojo)
+   ========================= */
+.pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid var(--line);
+}
+
+.pill.ok{
+  color:var(--ok);
+  border-color:#bbf7d0;
+  background:#f0fdf4;
+}
+
+.pill.warn{
+  color:var(--warn);
+  border-color:#fde68a;
+  background:#fffbeb;
+}
+
+.pill.danger{
+  color:var(--danger);
+  border-color:#fecaca;
+  background:#fef2f2;
+}
