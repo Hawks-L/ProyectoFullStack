@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <!-- =========================
+         1) METADATOS DEL DOCUMENTO
+         - charset: para soportar tildes/ñ correctamente
+         - viewport: para que se vea bien en móvil (responsive)
+         - title: nombre de la pestaña del navegador
+         ========================= -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Control Docentes por Salas — Bloques</title>
+  </head>
+
+  <body>
+    <!-- =========================
+         2) HEADER (TOPBAR / NAV)
+         - Se mantiene "fijo" visualmente como estructura general del sitio.
+         - Contiene:
+           a) Branding (logo + título)
+           b) Menú SPA (links con hash)
+         
+  ---- > NOTA: Estos enlaces NO cargan otra página HTML.
+         Solo cambian el hash (#/tablero, #/gestion).
+         El router en main.js detecta el cambio y renderiza la vista.
+         ========================= -->
+    <header class="topbar">
+      <div class="brand">
+        <!-- Logo o identificador visual -->
+        <div class="logo">USTA</div>
+
+        <!-- Título y subtítulo de la aplicación -->
+        <div>
+          <div class="title">Control de Docentes por Salas</div>
+          <div class="subtitle">Por fecha + bloque horario + sala (SPA)</div>
+        </div>
+      </div>
+
+      <!-- =========================
+           MENÚ DE NAVEGACIÓN (SPA)
+           - href="#/tablero" y href="#/gestion" usan hash routing.
+           - Esto evita recargar el navegador.
+           - main.js escucha "hashchange" y decide qué vista pintar.
+           ========================= -->
+      <nav class="nav">
+        <a href="#/tablero">Tablero</a>
+        <a href="#/gestion">Gestión</a>
+      </nav>
+    </header>
+
+    <!-- =========================
+         3) CONTENEDOR PRINCIPAL (LAYOUT)
+         - Aquí está la idea SPA:
+           - index.html es la única página.
+           - Dentro de #app se "pintan" las pantallas (vistas).
+         - main.js reemplaza dinámicamente el contenido:
+           document.querySelector("#app").innerHTML = `...`
+         ========================= -->
+    <main class="layout">
+      <!-- Contenedor donde se renderizan las vistas (Tablero / Gestión) -->
+      <div id="app" class="card"></div>
+    </main>
+
+    <!-- =========================
+         4) FOOTER
+         - Pie de página visual, no cambia con la navegación.
+         - En SPA normalmente este tipo de estructura es permanente.
+         ========================= -->
+    <footer class="footer">
+      <small>© 2026 — Demo SPA (Vite + Vanilla)</small>
+    </footer>
+
+    <!-- =========================
+         5) CARGA DEL JAVASCRIPT (ENTRYPOINT)
+         - type="module": permite usar import/export (ESM).
+         - src="/src/main.js": archivo principal de la SPA.
+         - main.js hace:
+           a) define el estado (state)
+           b) define router()
+           c) define vistas (viewTablero, viewGestion)
+           d) escucha eventos (load, hashchange)
+           e) renderiza dentro de #app
+         ========================= -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
