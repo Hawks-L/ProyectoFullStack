@@ -1,48 +1,48 @@
 import { useEffect, useMemo, useState } from "react";
 
 /* =========================================================
-   1) DESCRIPCIÓN GENERAL DEL MÓDULO (para el desarrollador)
-   =========================================================
-   SPA: Reserva de Salas de Tutorías (5 vistas)
-   - Dashboard: resumen y próximas reservas
-   - Reservar: formulario para crear una reserva
-   - Mis reservas: listar, buscar y cancelar
-   - Salas: CRUD simple (crear y activar/desactivar) + sede/edificio
-   - Configuración: reset + exportar/importar backup JSON
+   Actividad No.4
+   Módulo de reserva de lockers por Sede - Edificio - Piso
+   + Backup: exportar/importar lockers y reservas en JSON
    Persistencia: localStorage
-*/
+========================================================= */
 
 /* =========================================================
-   2) CLAVES DE LOCALSTORAGE (dónde guardamos datos)
+   1) CLAVES DE LOCALSTORAGE
    ========================================================= */
 const LS_KEYS = {
-  rooms: "tutorias_rooms_v1",       /* rooms: [ { id, name, sede, edificio, capacity, active } ] */
-  bookings: "tutorias_bookings_v1", /* bookings: [ { id, roomId, date, start, end, tutor, topic, status, createdAt } ] */
+  lockers: "lockers_v1",          /* lockers: [ { id, name, sede, edificio, piso, active } ] */
+  reservations: "locker_res_v1",  /* reservations: [ { id, lockerId, date, start, end, usuario, motivo, status, createdAt } ] */
 };
 
 /* =========================================================
-   3) REGLA DE NEGOCIO: Sede -> Edificios permitidos (para validar creación de salas)
-   - Cada sala debe tener una sede y un edificio válido según esta regla
-   - Si se quiere agregar una nueva sede, se debe actualizar este objeto con su lista de edificios
-     (no hay CRUD para sedes/edificios, solo para salas)
-     - Ejemplo: SEDES["NUEVA_SEDE"] = { label: "Nueva Sede", edificios: ["Edificio A", "Edificio B"] }
+   2) REGLA DE NEGOCIO (insumo a medida):
+      Sede -> Edificio -> Pisos válidos
+   - Si deseas agregar sedes/edificios/pisos, edita este objeto.
    ========================================================= */
 const SEDES = {
-  CENTRO: { label: "Centro", edificios: ["Centro Histórico"] },
-  CAMPUS: { label: "Campus", edificios: ["Santo Domingo", "Giordano Bruno"] },
+  CENTRO: {
+    label: "Centro",
+    edificios: {
+      "Centro Histórico": ["1", "2", "3"],
+    },
+  },
+  CAMPUS: {
+    label: "Campus",
+    edificios: {
+      "Santo Domingo": ["1", "2", "3", "4"],
+      "Giordano Bruno": ["1", "2"],
+    },
+  },
 };
 
 /* =========================================================
-   4) UTILIDADES: IDs, LocalStorage, Fechas y Formato 
+   3) UTILIDADES
    ========================================================= */
-
-/** Genera un id único (suficiente para el demo/localStorage) */
 function uid() {
   return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-/** Lee JSON desde localStorage, o devuelve fallback si falla */
-/* el fallback se usa para cargar data inicial la primera vez o si el JSON está corrupto */
 function loadLS(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -52,12 +52,10 @@ function loadLS(key, fallback) {
   }
 }
 
-/** Guarda JSON en localStorage */
 function saveLS(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-/** Retorna la fecha actual en formato ISO YYYY-MM-DD */
 function todayISO() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -66,141 +64,81 @@ function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/** Determina si una fecha ISO es pasada (comparación por string) */
 function isPastDate(dateISO) {
   return dateISO < todayISO();
 }
 
-/** Formatea YYYY-MM-DD a DD/MM/YYYY para mostrar al usuario */
 function prettyDate(dateISO) {
   const [y, m, d] = dateISO.split("-");
   return `${d}/${m}/${y}`;
 }
 
 /* =========================================================
-   5) DATA INICIAL: Salas por defecto (incluye sede/edificio)
+   4) DATA INICIAL: Lockers por defecto (sede/edificio/piso)
    ========================================================= */
-const DEFAULT_ROOMS = [
-  {
-    id: "TUT-CH-01",
-    name: "SALA TUT-CH-01",
-    sede: "CENTRO",
-    edificio: "Centro Histórico",
-    capacity: 10,
-    active: true,
-  },
-  {
-    id: "TUT-SD-01",
-    name: "SALA TUT-SD-01",
-    sede: "CAMPUS",
-    edificio: "Santo Domingo",
-    capacity: 22,
-    active: true,
-  },
-  {
-    id: "TUT-SD-02",
-    name: "SALA TUT-SD-02",
-    sede: "CAMPUS",
-    edificio: "Santo Domingo",
-    capacity: 20,
-    active: true,
-  },
-  {
-    id: "TUT-GB-01",
-    name: "SALA TUT-GB-01",
-    sede: "CAMPUS",
-    edificio: "Giordano Bruno",
-    capacity: 30,
-    active: true,
-  },
+const DEFAULT_LOCKERS = [
+  { id: "LK-CH-101", name: "LOCKER CH-101", sede: "CENTRO", edificio: "Centro Histórico", piso: "1", active: true },
+  { id: "LK-CH-102", name: "LOCKER CH-102", sede: "CENTRO", edificio: "Centro Histórico", piso: "1", active: true },
+  { id: "LK-SD-201", name: "LOCKER SD-201", sede: "CAMPUS", edificio: "Santo Domingo", piso: "2", active: true },
+  { id: "LK-SD-401", name: "LOCKER SD-401", sede: "CAMPUS", edificio: "Santo Domingo", piso: "4", active: true },
+  { id: "LK-GB-101", name: "LOCKER GB-101", sede: "CAMPUS", edificio: "Giordano Bruno", piso: "1", active: true },
 ];
 
 /* =========================================================
-   6) COMPONENTE PRINCIPAL: APP (SPA)
+   5) APP (SPA)
    ========================================================= */
 export default function App() {
-  /* ---------------------------
-     6.1) NAVEGACIÓN SPA (vista actual, es decir qué sección se muestra)
-     --------------------------- */
+  /* 5.1 Navegación SPA */
   const [view, setView] = useState("dashboard");
 
-  /* ---------------------------
-     6.2) ESTADO PERSISTENTE (salas y reservas)
-     - Se carga desde localStorage al iniciar
-     --------------------------- */
-  const [rooms, setRooms] = useState(() => loadLS(LS_KEYS.rooms, DEFAULT_ROOMS));
-  const [bookings, setBookings] = useState(() => loadLS(LS_KEYS.bookings, []));
+  /* 5.2 Estado persistente */
+  const [lockers, setLockers] = useState(() => loadLS(LS_KEYS.lockers, DEFAULT_LOCKERS));
+  const [reservations, setReservations] = useState(() => loadLS(LS_KEYS.reservations, []));
 
-  /* ---------------------------
-     6.3) ESTADO DE UI (toast / alertas), UI es todo lo que no es data ni navegación
-     --------------------------- */
+  /* 5.3 UI */
   const [toast, setToast] = useState({ type: "info", msg: "" });
 
-  /* ---------------------------
-     6.4) EFECTOS: persistencia automática
-     - Cada vez que cambian rooms/bookings, se guardan en localStorage
-     --------------------------- */
-  useEffect(() => saveLS(LS_KEYS.rooms, rooms), [rooms]);
-  useEffect(() => saveLS(LS_KEYS.bookings, bookings), [bookings]);
+  /* 5.4 Persistencia automática */
+  useEffect(() => saveLS(LS_KEYS.lockers, lockers), [lockers]);
+  useEffect(() => saveLS(LS_KEYS.reservations, reservations), [reservations]);
 
-  /* ---------------------------
-     6.5) DERIVADOS (useMemo) para rendimiento/claridad
-      - Evitan cálculos repetidos en cada render
-      useMemo representa "variables" que se actualizan automáticamente cuando cambian sus dependencias (rooms/bookings)
-     --------------------------- */
+  /* 5.5 Derivados */
+  const activeLockers = useMemo(() => lockers.filter((l) => l.active), [lockers]);
 
-  /** Salas activas para reservar */
-  const activeRooms = useMemo(() => rooms.filter((r) => r.active), [rooms]);
-
-  /** Próximas reservas: ordenadas y filtradas desde hoy 
-   * los ...bookings crean una copia para no mutar el estado original al ordenar, 
-   * ya que sort() ordena in-place (mutando el array) y 
-   * eso puede causar bugs si se hace directamente sobre bookings
-  */
-  const upcomingBookings = useMemo(() => {
-    const sorted = [...bookings].sort((a, b) => {
+  const upcomingReservations = useMemo(() => {
+    const sorted = [...reservations].sort((a, b) => {
       const A = `${a.date} ${a.start}`;
       const B = `${b.date} ${b.start}`;
       return A.localeCompare(B);
     });
-    return sorted.filter((b) => b.date >= todayISO()).slice(0, 6);
-  }, [bookings]);
+    return sorted.filter((r) => r.date >= todayISO()).slice(0, 6);
+  }, [reservations]);
 
-  /** Indicadores de dashboard */
   const stats = useMemo(() => {
-    const total = bookings.length;
-    const today = bookings.filter((b) => b.date === todayISO()).length;
-    const active = activeRooms.length;
+    const total = reservations.length;
+    const today = reservations.filter((r) => r.date === todayISO()).length;
+    const active = activeLockers.length;
     return { total, today, active };
-  }, [bookings, activeRooms]);
+  }, [reservations, activeLockers]);
 
-  /* ---------------------------
-     6.6) FUNCIÓN DE NOTIFICACIÓN (toast con auto-cierre)
-     --------------------------- */
   function notify(type, msg) {
     setToast({ type, msg });
     window.clearTimeout(notify._t);
     notify._t = window.setTimeout(() => setToast({ type: "info", msg: "" }), 2600);
   }
 
-  /* ---------------------------
-     6.7) REGLA: detectar solapamiento de horas
-     solapamiento es cuando el inicio de un rango es menor al fin del otro, y viceversa
-     ejemplo: [10:00, 11:00] y [10:30, 11:30] se solapan porque 10:00 < 11:30 y 10:30 < 11:00
-     - Retorna true si los rangos [aStart,aEnd] y [bStart,bEnd] se cruzan
-     --------------------------- */
   function overlaps(aStart, aEnd, bStart, bEnd) {
     return aStart < bEnd && bStart < aEnd;
   }
 
-  /* ---------------------------
-     6.8) CASO DE USO: crear reserva
-     - Valida campos, fecha, horario, sala activa y colisiones
-     --------------------------- */
-  function createBooking(payload) {
-    const { roomId, date, start, end, tutor, topic } = payload;
+  /* =========================================================
+     5.6 CASOS DE USO
+     ========================================================= */
 
-    if (!roomId || !date || !start || !end || !tutor.trim() || !topic.trim()) {
+  function createReservation(payload) {
+    const { lockerId, date, start, end, usuario, motivo } = payload;
+
+    if (!lockerId || !date || !start || !end || !usuario.trim() || !motivo.trim()) {
       notify("error", "Todos los campos son obligatorios.");
       return;
     }
@@ -213,115 +151,105 @@ export default function App() {
       return;
     }
 
-    const room = rooms.find((r) => r.id === roomId);
-    if (!room || !room.active) {
-      notify("error", "La sala seleccionada no está disponible.");
+    const locker = lockers.find((l) => l.id === lockerId);
+    if (!locker || !locker.active) {
+      notify("error", "El locker seleccionado no está disponible.");
       return;
     }
 
-    const sameRoomSameDay = bookings.filter((b) => b.roomId === roomId && b.date === date);
-    const collision = sameRoomSameDay.some((b) => overlaps(start, end, b.start, b.end));
+    const collision = reservations.some((r) => {
+      if (r.status !== "CONFIRMADA") return false;
+      if (r.lockerId !== lockerId) return false;
+      if (r.date !== date) return false;
+      return overlaps(start, end, r.start, r.end);
+    });
+
     if (collision) {
-      notify("error", "Conflicto: ya existe una reserva en ese horario para esa sala.");
+      notify("error", "Ya existe una reserva para ese locker en ese horario.");
       return;
     }
 
-    const newB = {
+    const newRes = {
       id: uid(),
-      roomId,
+      lockerId,
       date,
       start,
       end,
-      tutor: tutor.trim(),
-      topic: topic.trim(),
+      usuario: usuario.trim(),
+      motivo: motivo.trim(),
       status: "CONFIRMADA",
       createdAt: new Date().toISOString(),
     };
 
-    setBookings((prev) => [newB, ...prev]);
-    notify("success", "Reserva creada y confirmada.");
+    setReservations((prev) => [newRes, ...prev]);
+    notify("success", "Reserva confirmada.");
     setView("mis-reservas");
   }
 
-  /* ---------------------------
-     6.9) CASO DE USO: cancelar reserva
-     - No borra, cambia estado a CANCELADA (historial)
-     --------------------------- */
-  function cancelBooking(id) {
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: "CANCELADA" } : b)));
+  function cancelReservation(id) {
+    setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, status: "CANCELADA" } : r)));
     notify("info", "Reserva cancelada.");
   }
 
-  /* ---------------------------
-     6.10) CASO DE USO: crear sala
-     - Valida sede/edificio según reglas del objeto SEDES
-     --------------------------- */
-  function addRoom({ id, name, sede, edificio, capacity }) {
-    const cleanId = id.trim().toUpperCase();
-    const cleanName = name.trim();
-    const cap = Number(capacity);
+  function addLocker(payload) {
+    const { id, name, sede, edificio, piso } = payload;
 
-    if (!cleanId || !cleanName || !sede || !edificio || !cap || cap <= 0) {
-      notify("error", "Completa todos los campos.");
+    if (!id.trim() || !name.trim()) {
+      notify("error", "ID y nombre son obligatorios.");
+      return;
+    }
+    if (lockers.some((l) => l.id === id.trim())) {
+      notify("error", "Ya existe un locker con ese ID.");
       return;
     }
 
-    if (!SEDES[sede] || !SEDES[sede].edificios.includes(edificio)) {
-      notify("error", "El edificio no corresponde a la sede seleccionada.");
-      return;
-    }
+    const sedeOk = !!SEDES[sede];
+    const sedeFinal = sedeOk ? sede : "CAMPUS";
 
-    if (rooms.some((r) => r.id === cleanId)) {
-      notify("error", "Ya existe una sala con ese ID.");
-      return;
-    }
+    const edificiosObj = SEDES[sedeFinal].edificios;
+    const edificios = Object.keys(edificiosObj);
+    const edificioFinal = edificios.includes(edificio) ? edificio : edificios[0];
 
-    setRooms((prev) => [
-      ...prev,
-      { id: cleanId, name: cleanName, sede, edificio, capacity: cap, active: true },
-    ]);
-    notify("success", "Sala creada.");
+    const pisos = edificiosObj[edificioFinal] ?? ["1"];
+    const pisoFinal = pisos.includes(String(piso)) ? String(piso) : pisos[0];
+
+    const newLocker = {
+      id: id.trim(),
+      name: name.trim(),
+      sede: sedeFinal,
+      edificio: edificioFinal,
+      piso: pisoFinal,
+      active: true,
+    };
+
+    setLockers((prev) => [...prev, newLocker]);
+    notify("success", "Locker creado.");
   }
 
-  /* ---------------------------
-     6.11) CASO DE USO: activar/desactivar sala
-     - Cambia disponibilidad (pero no borra)
-     --------------------------- */
-  function toggleRoom(id) {
-    setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, active: !r.active } : r)));
-    notify("info", "Estado de sala actualizado.");
+  function toggleLocker(id) {
+    setLockers((prev) => prev.map((l) => (l.id === id ? { ...l, active: !l.active } : l)));
   }
 
-  /* ---------------------------
-     6.12) MANTENIMIENTO: reset total
-     --------------------------- */
   function resetAll() {
-    if (!confirm("¿Seguro? Esto borrará salas/reservas y restablecerá valores por defecto.")) return;
-    setRooms(DEFAULT_ROOMS);
-    setBookings([]);
-    notify("success", "Datos reiniciados.");
+    if (!confirm("¿Seguro? Se perderán lockers y reservas.")) return;
+    setLockers(DEFAULT_LOCKERS);
+    setReservations([]);
+    notify("info", "Datos reiniciados.");
     setView("dashboard");
   }
 
-  /* ---------------------------
-     6.13) MANTENIMIENTO: exportar backup JSON
-     --------------------------- */
   function exportJSON() {
-    const data = { rooms, bookings, exportedAt: new Date().toISOString() };
+    const data = { lockers, reservations, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "tutorias_backup.json";
+    a.download = "lockers_backup.json";
     a.click();
     URL.revokeObjectURL(url);
     notify("success", "Backup exportado (JSON).");
   }
 
-  /* ---------------------------
-     6.14) MANTENIMIENTO: importar backup JSON
-     - Normaliza sede/edificio por compatibilidad con versiones antiguas
-     --------------------------- */
   function importJSON(file) {
     if (!file) return;
     const reader = new FileReader();
@@ -329,17 +257,24 @@ export default function App() {
       try {
         const parsed = JSON.parse(reader.result);
 
-        if (!parsed.rooms || !parsed.bookings) throw new Error("Estructura inválida");
+        if (!parsed.lockers || !parsed.reservations) throw new Error("Estructura inválida");
 
-        const normalizedRooms = parsed.rooms.map((r) => {
-          const sede = r.sede && SEDES[r.sede] ? r.sede : "CAMPUS";
-          const edificioOk = SEDES[sede].edificios.includes(r.edificio);
-          const edificio = edificioOk ? r.edificio : SEDES[sede].edificios[0];
-          return { ...r, sede, edificio };
+        const normalizedLockers = parsed.lockers.map((l) => {
+          const sede = l.sede && SEDES[l.sede] ? l.sede : "CAMPUS";
+
+          const edificiosObj = SEDES[sede].edificios;
+          const edificios = Object.keys(edificiosObj);
+
+          const edificio = edificios.includes(l.edificio) ? l.edificio : edificios[0];
+
+          const pisos = edificiosObj[edificio] ?? ["1"];
+          const piso = pisos.includes(String(l.piso)) ? String(l.piso) : pisos[0];
+
+          return { ...l, sede, edificio, piso };
         });
 
-        setRooms(normalizedRooms);
-        setBookings(parsed.bookings);
+        setLockers(normalizedLockers);
+        setReservations(parsed.reservations);
 
         notify("success", "Backup importado correctamente.");
         setView("dashboard");
@@ -350,29 +285,23 @@ export default function App() {
     reader.readAsText(file);
   }
 
-  /* ---------------------------
-     6.15) UTILIDAD DE UI: etiqueta de sala completa
-     es decir, nombre + sede/edificio para mostrar en tablas y detalles
-     --------------------------- */
-  function roomLabelById(roomId) {
-    const r = rooms.find((x) => x.id === roomId);
-    if (!r) return roomId;
-    const sedeLbl = SEDES[r.sede]?.label ?? r.sede;
-    return `${r.name} • ${sedeLbl} - ${r.edificio}`;
+  function lockerLabelById(lockerId) {
+    const l = lockers.find((x) => x.id === lockerId);
+    if (!l) return lockerId;
+    const sedeLbl = SEDES[l.sede]?.label ?? l.sede;
+    return `${l.name} • ${sedeLbl} - ${l.edificio} • Piso ${l.piso}`;
   }
 
-  /* ---------------------------
-     6.16) RENDER: estructura general (layout + header + vistas)
-     lo que hace es renderizar UNA vista (Dashboard / Reservar / Mis reservas / Salas / Config) según el estado `view`
-     --------------------------- */
+  /* =========================================================
+     5.7 RENDER
+     ========================================================= */
   return (
     <div className="layout">
-      {/* Header superior con marca y navegación entre vistas */}
       <header className="topbar">
         <div className="brand">
           <span className="dot" />
           <div>
-            <h1>Reserva de Salas de Tutorías</h1>
+            <h1>Reserva de Lockers</h1>
             <p>SPA (Vite + React) • Persistencia con localStorage</p>
           </div>
         </div>
@@ -387,8 +316,8 @@ export default function App() {
           <button className={view === "mis-reservas" ? "active" : ""} onClick={() => setView("mis-reservas")}>
             Mis reservas
           </button>
-          <button className={view === "salas" ? "active" : ""} onClick={() => setView("salas")}>
-            Salas
+          <button className={view === "lockers" ? "active" : ""} onClick={() => setView("lockers")}>
+            Lockers
           </button>
           <button className={view === "config" ? "active" : ""} onClick={() => setView("config")}>
             Config
@@ -396,58 +325,49 @@ export default function App() {
         </nav>
       </header>
 
-      {/* Toast: mensajes de éxito/error/info */}
       {toast.msg && (
         <div className={`toast ${toast.type}`}>
           <strong>{toast.type.toUpperCase()}:</strong> {toast.msg}
         </div>
       )}
 
-      {/* Main: renderiza UNA vista según el estado `view` */}
       <main className="main">
         {view === "dashboard" && (
           <section className="card">
             <h2>Dashboard</h2>
-            <p className="muted">Resumen rápido del estado de tutorías.</p>
+            <p className="muted">Resumen rápido del estado de lockers.</p>
 
             <div className="grid3">
               <div className="kpi">
                 <div className="kpi-num">{stats.active}</div>
-                <div className="kpi-lbl">Salas activas</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-num">{stats.total}</div>
-                <div className="kpi-lbl">Reservas totales</div>
+                <div className="kpi-lbl">Lockers activos</div>
               </div>
               <div className="kpi">
                 <div className="kpi-num">{stats.today}</div>
                 <div className="kpi-lbl">Reservas hoy</div>
               </div>
+              <div className="kpi">
+                <div className="kpi-num">{stats.total}</div>
+                <div className="kpi-lbl">Reservas totales</div>
+              </div>
             </div>
 
-            <hr className="hr" />
+            <hr />
 
             <h3>Próximas reservas</h3>
-            {upcomingBookings.length === 0 ? (
-              <p className="muted">No hay reservas próximas.</p>
+            {upcomingReservations.length === 0 ? (
+              <p className="muted">Aún no hay reservas próximas.</p>
             ) : (
-              <div className="table">
-                <div className="thead">
-                  <div>Fecha</div>
-                  <div>Hora</div>
-                  <div>Sala (Sede/Edificio)</div>
-                  <div>Tutor</div>
-                  <div>Estado</div>
-                </div>
-                {upcomingBookings.map((b) => (
-                  <div className="trow" key={b.id}>
-                    <div>{prettyDate(b.date)}</div>
-                    <div>{b.start} - {b.end}</div>
-                    <div>{roomLabelById(b.roomId)}</div>
-                    <div>{b.tutor}</div>
-                    <div>
-                      <span className={`pill ${b.status}`}>{b.status}</span>
+              <div className="list">
+                {upcomingReservations.map((r) => (
+                  <div className="item" key={r.id}>
+                    <div className="item-main">
+                      <div className="item-title">{lockerLabelById(r.lockerId)}</div>
+                      <div className="item-sub">
+                        {prettyDate(r.date)} • {r.start}-{r.end} • {r.usuario}
+                      </div>
                     </div>
+                    <span className={`pill ${r.status}`}>{r.status}</span>
                   </div>
                 ))}
               </div>
@@ -455,135 +375,199 @@ export default function App() {
           </section>
         )}
 
-        {view === "reservar" && <ReserveView rooms={activeRooms} onCreate={createBooking} />}
-        {view === "mis-reservas" && <MyBookingsView bookings={bookings} onCancel={cancelBooking} rooms={rooms} />}
-        {view === "salas" && <RoomsView rooms={rooms} onAdd={addRoom} onToggle={toggleRoom} />}
+        {view === "reservar" && <ReserveView lockers={activeLockers} onCreate={createReservation} />}
+
+        {view === "mis-reservas" && (
+          <MyReservationsView reservations={reservations} onCancel={cancelReservation} lockers={lockers} />
+        )}
+
+        {view === "lockers" && <LockersView lockers={lockers} onAdd={addLocker} onToggle={toggleLocker} />}
+
         {view === "config" && <ConfigView onReset={resetAll} onExport={exportJSON} onImport={importJSON} />}
       </main>
 
-      {/* Footer institucional */}
-      <footer className="footer">
-        <span>© 2026 • Tutorías • Demo SPA</span>
-      </footer>
+      <footer className="footer muted">Actividad No.4 • Reserva de lockers por sede-edificio-piso</footer>
     </div>
   );
 }
 
 /* =========================================================
-   7) VISTAS: componentes hijos (Reservar / Mis reservas / Salas / Config)
+   VISTAS
    ========================================================= */
 
-function ReserveView({ rooms, onCreate }) {
-  /* Estado del formulario de reserva */
-  const [roomId, setRoomId] = useState(() => rooms[0]?.id ?? "");
+function ReserveView({ lockers, onCreate }) {
+  // filtros jerárquicos: sede -> edificio -> piso -> locker
+  const sedeKeys = Object.keys(SEDES);
+  const [sede, setSede] = useState(sedeKeys[0] ?? "CAMPUS");
+
+  const edificioKeys = Object.keys(SEDES[sede]?.edificios ?? {});
+  const [edificio, setEdificio] = useState(edificioKeys[0] ?? "");
+
+  const pisosList = (SEDES[sede]?.edificios?.[edificio] ?? ["1"]).map(String);
+  const [piso, setPiso] = useState(pisosList[0] ?? "1");
+
+  const filteredLockers = useMemo(() => {
+    return lockers.filter((l) => l.sede === sede && l.edificio === edificio && String(l.piso) === String(piso));
+  }, [lockers, sede, edificio, piso]);
+
+  const [lockerId, setLockerId] = useState(() => filteredLockers[0]?.id ?? "");
   const [date, setDate] = useState(todayISO());
   const [start, setStart] = useState("08:00");
   const [end, setEnd] = useState("09:00");
-  const [tutor, setTutor] = useState("");
-  const [topic, setTopic] = useState("");
+  const [usuario, setUsuario] = useState("");
+  const [motivo, setMotivo] = useState("");
 
-  /* Evita que el select quede vacío si cambian salas activas */
-  const effectiveRoomId = roomId || rooms[0]?.id || "";
+  // si cambia sede, resetea edificio y piso
+  function handleSedeChange(value) {
+    setSede(value);
+    const eds = Object.keys(SEDES[value]?.edificios ?? {});
+    const ed0 = eds[0] ?? "";
+    setEdificio(ed0);
+    const pisos0 = (SEDES[value]?.edificios?.[ed0] ?? ["1"]).map(String);
+    setPiso(pisos0[0] ?? "1");
+  }
 
-  /* Envía el formulario al caso de uso createBooking (padre) */
+  function handleEdificioChange(value) {
+    setEdificio(value);
+    const pisos0 = (SEDES[sede]?.edificios?.[value] ?? ["1"]).map(String);
+    setPiso(pisos0[0] ?? "1");
+  }
+
+  // mantener locker seleccionado válido
+  useEffect(() => {
+    const next = filteredLockers[0]?.id ?? "";
+    setLockerId((prev) => (prev && filteredLockers.some((l) => l.id === prev) ? prev : next));
+  }, [filteredLockers]);
+
   function submit(e) {
     e.preventDefault();
-    onCreate({ roomId: effectiveRoomId, date, start, end, tutor, topic });
+    onCreate({ lockerId, date, start, end, usuario, motivo });
   }
 
   return (
     <section className="card">
-      <h2>Reservar sala</h2>
-      <p className="muted">Selecciona sala, fecha y horario.</p>
+      <h2>Reservar locker</h2>
+      <p className="muted">Selecciona sede, edificio y piso para filtrar lockers disponibles.</p>
 
-      {rooms.length === 0 ? (
-        <p className="muted">No hay salas activas. Ve a la vista “Salas” y activa/crea una.</p>
-      ) : (
-        <form className="stack" onSubmit={submit}>
+      <form className="stack" onSubmit={submit}>
+        <div className="row3">
           <label>
-            Sala
-            <select value={effectiveRoomId} onChange={(e) => setRoomId(e.target.value)} required>
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name} • {SEDES[r.sede]?.label} - {r.edificio} • Cap. {r.capacity}
+            Sede
+            <select value={sede} onChange={(e) => handleSedeChange(e.target.value)}>
+              {Object.keys(SEDES).map((k) => (
+                <option key={k} value={k}>
+                  {SEDES[k].label}
                 </option>
               ))}
             </select>
           </label>
 
-          <div className="row2">
-            <label>
-              Fecha
-              <input type="date" value={date} min={todayISO()} onChange={(e) => setDate(e.target.value)} required />
-            </label>
-            <label>
-              Tutor
-              <input value={tutor} onChange={(e) => setTutor(e.target.value)} placeholder="Ej: Ing. Karen" required />
-            </label>
-          </div>
-
-          <div className="row2">
-            <label>
-              Hora inicio
-              <input type="time" value={start} onChange={(e) => setStart(e.target.value)} required />
-            </label>
-            <label>
-              Hora fin
-              <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} required />
-            </label>
-          </div>
-
           <label>
-            Tema / motivo
-            <textarea value={topic} onChange={(e) => setTopic(e.target.value)} rows={3} placeholder="Ej: Dudas de React Router" required />
+            Edificio
+            <select value={edificio} onChange={(e) => handleEdificioChange(e.target.value)}>
+              {Object.keys(SEDES[sede]?.edificios ?? {}).map((ed) => (
+                <option key={ed} value={ed}>
+                  {ed}
+                </option>
+              ))}
+            </select>
           </label>
 
-          <button type="submit">Confirmar reserva</button>
-        </form>
-      )}
+          <label>
+            Piso
+            <select value={piso} onChange={(e) => setPiso(e.target.value)}>
+              {(SEDES[sede]?.edificios?.[edificio] ?? ["1"]).map((p) => (
+                <option key={p} value={String(p)}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <label>
+          Locker
+          <select value={lockerId} onChange={(e) => setLockerId(e.target.value)} required>
+            {filteredLockers.length === 0 ? (
+              <option value="">(Sin lockers activos en este piso)</option>
+            ) : (
+              filteredLockers.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name} • {SEDES[l.sede]?.label} - {l.edificio} • Piso {l.piso}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+
+        <div className="row2">
+          <label>
+            Fecha
+            <input type="date" value={date} min={todayISO()} onChange={(e) => setDate(e.target.value)} required />
+          </label>
+          <label>
+            Usuario
+            <input value={usuario} onChange={(e) => setUsuario(e.target.value)} placeholder="Ej: Juan Pérez" required />
+          </label>
+        </div>
+
+        <div className="row2">
+          <label>
+            Hora inicio
+            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} required />
+          </label>
+          <label>
+            Hora fin
+            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} required />
+          </label>
+        </div>
+
+        <label>
+          Motivo / descripción
+          <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} placeholder="Ej: Guardar materiales" required />
+        </label>
+
+        <button type="submit" disabled={!lockerId}>
+          Confirmar reserva
+        </button>
+      </form>
     </section>
   );
 }
 
-function MyBookingsView({ bookings, onCancel, rooms }) {
-  /* Estado de filtros de búsqueda */
+function MyReservationsView({ reservations, onCancel, lockers }) {
   const [q, setQ] = useState("");
   const [onlyActive, setOnlyActive] = useState(true);
 
-  /* Devuelve etiqueta completa de la sala (para tabla y búsquedas) */
-  function roomName(id) {
-    const r = rooms.find((x) => x.id === id);
-    if (!r) return id;
-    return `${r.name} • ${SEDES[r.sede]?.label} - ${r.edificio}`;
+  function lockerName(id) {
+    const l = lockers.find((x) => x.id === id);
+    if (!l) return id;
+    return `${l.name} • ${SEDES[l.sede]?.label} - ${l.edificio} • Piso ${l.piso}`;
   }
 
-  /* Lista filtrada: búsqueda + checkbox “Solo confirmadas” */
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
 
-    return bookings
-      // ✅ Si onlyActive está activo, muestra SOLO reservas confirmadas
-      .filter((b) => (onlyActive ? b.status === "CONFIRMADA" : true))
-      // ✅ Filtro de texto por sala/sede/edificio/tutor/tema/fecha
-      .filter((b) => {
+    return reservations
+      .filter((r) => (onlyActive ? r.status === "CONFIRMADA" : true))
+      .filter((r) => {
         if (!query) return true;
 
-        const r = rooms.find((x) => x.id === b.roomId);
-        const roomLabel = r
-          ? `${r.name} • ${SEDES[r.sede]?.label} - ${r.edificio}`.toLowerCase()
-          : b.roomId.toLowerCase();
+        const l = lockers.find((x) => x.id === r.lockerId);
+        const lockerLabel = l
+          ? `${l.name} • ${SEDES[l.sede]?.label} - ${l.edificio} • piso ${l.piso}`.toLowerCase()
+          : r.lockerId.toLowerCase();
 
         return (
-          b.roomId.toLowerCase().includes(query) ||
-          b.tutor.toLowerCase().includes(query) ||
-          b.topic.toLowerCase().includes(query) ||
-          b.date.includes(query) ||
-          roomLabel.includes(query)
+          r.lockerId.toLowerCase().includes(query) ||
+          r.usuario.toLowerCase().includes(query) ||
+          r.motivo.toLowerCase().includes(query) ||
+          r.date.includes(query) ||
+          lockerLabel.includes(query)
         );
       })
-      // ✅ Orden por fecha+hora (más recientes primero)
       .sort((a, b) => `${b.date} ${b.start}`.localeCompare(`${a.date} ${a.start}`));
-  }, [bookings, q, onlyActive, rooms]);
+  }, [reservations, q, onlyActive, lockers]);
 
   return (
     <section className="card">
@@ -591,104 +575,116 @@ function MyBookingsView({ bookings, onCancel, rooms }) {
       <p className="muted">Filtra y cancela reservas.</p>
 
       <div className="row">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por sala/sede/edificio, tutor, tema o fecha"
-          aria-label="Buscar reservas"
-        />
-
-        {/* Checkbox para mostrar SOLO reservas confirmadas */}
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por locker/sede/edificio/piso, usuario o fecha" />
         <label className="check">
           <input type="checkbox" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} />
           Solo confirmadas
         </label>
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="muted">No hay reservas para mostrar.</p>
-      ) : (
-        <div className="table">
-          <div className="thead">
-            <div>Fecha</div>
-            <div>Hora</div>
-            <div>Sala (Sede/Edificio)</div>
-            <div>Tutor</div>
-            <div>Motivo</div>
-            <div>Acción</div>
-          </div>
-
-          {filtered.map((b) => (
-            <div className="trow" key={b.id}>
-              <div>{prettyDate(b.date)}</div>
-              <div>{b.start}-{b.end}</div>
-              <div>{roomName(b.roomId)}</div>
-              <div>{b.tutor}</div>
-              <div className="clip" title={b.topic}>{b.topic}</div>
-
-              {/* Botón cancelar solo si está CONFIRMADA */}
-              <div>
-                {b.status === "CONFIRMADA" ? (
-                  <button className="danger" onClick={() => onCancel(b.id)}>Cancelar</button>
-                ) : (
-                  <span className={`pill ${b.status}`}>{b.status}</span>
-                )}
-              </div>
-            </div>
-          ))}
+      <div className="table">
+        <div className="thead">
+          <div>Locker</div>
+          <div>Fecha</div>
+          <div>Horario</div>
+          <div>Usuario</div>
+          <div>Estado</div>
+          <div>Acción</div>
         </div>
-      )}
+
+        {filtered.map((r) => (
+          <div className="trow" key={r.id}>
+            <div>{lockerName(r.lockerId)}</div>
+            <div>{prettyDate(r.date)}</div>
+            <div>
+              {r.start} - {r.end}
+            </div>
+            <div>{r.usuario}</div>
+            <div>
+              <span className={`pill ${r.status}`}>{r.status}</span>
+            </div>
+            <div>
+              <button className="danger" disabled={r.status !== "CONFIRMADA"} onClick={() => onCancel(r.id)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {filtered.length === 0 && <p className="muted" style={{ padding: 12 }}>No hay resultados.</p>}
+      </div>
     </section>
   );
 }
 
-function RoomsView({ rooms, onAdd, onToggle }) {
-  /* Estado del formulario de creación de sala */
+function LockersView({ lockers, onAdd, onToggle }) {
+  const sedeKeys = Object.keys(SEDES);
   const [id, setId] = useState("");
   const [name, setName] = useState("");
-  const [sede, setSede] = useState("CENTRO");
-  const [edificio, setEdificio] = useState(SEDES.CENTRO.edificios[0]);
-  const [capacity, setCapacity] = useState(20);
+  const [sede, setSede] = useState(sedeKeys[0] ?? "CAMPUS");
 
-  /* Al cambiar sede, se resetea el edificio al primer edificio válido */
+  const edificioKeys = Object.keys(SEDES[sede]?.edificios ?? {});
+  const [edificio, setEdificio] = useState(edificioKeys[0] ?? "");
+
+  const pisosList = (SEDES[sede]?.edificios?.[edificio] ?? ["1"]).map(String);
+  const [piso, setPiso] = useState(pisosList[0] ?? "1");
+
   function handleSedeChange(value) {
     setSede(value);
-    setEdificio(SEDES[value].edificios[0]);
+    const eds = Object.keys(SEDES[value]?.edificios ?? {});
+    const ed0 = eds[0] ?? "";
+    setEdificio(ed0);
+    const pisos0 = (SEDES[value]?.edificios?.[ed0] ?? ["1"]).map(String);
+    setPiso(pisos0[0] ?? "1");
   }
 
-  /* Envía datos al caso de uso addRoom (padre) y limpia inputs */
+  function handleEdificioChange(value) {
+    setEdificio(value);
+    const pisos0 = (SEDES[sede]?.edificios?.[value] ?? ["1"]).map(String);
+    setPiso(pisos0[0] ?? "1");
+  }
+
   function submit(e) {
     e.preventDefault();
-    onAdd({ id, name, sede, edificio, capacity });
+    onAdd({ id, name, sede, edificio, piso });
     setId("");
     setName("");
-    setCapacity(20);
   }
 
   return (
     <section className="card">
-      <h2>Salas</h2>
-      <p className="muted">Crear salas y asociarlas a sede y edificio.</p>
+      <h2>Lockers</h2>
+      <p className="muted">CRUD simple: crear lockers y asociarlos a sede, edificio y piso.</p>
 
       <form className="row3" onSubmit={submit}>
-        <input value={id} onChange={(e) => setId(e.target.value)} placeholder="ID (ej: SALA-4E)" />
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Sala 4E)" />
+        <input value={id} onChange={(e) => setId(e.target.value)} placeholder="ID (ej: LK-SD-305)" />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Locker SD-305)" />
 
         <select value={sede} onChange={(e) => handleSedeChange(e.target.value)}>
           {Object.keys(SEDES).map((key) => (
-            <option key={key} value={key}>{SEDES[key].label}</option>
+            <option key={key} value={key}>
+              {SEDES[key].label}
+            </option>
           ))}
         </select>
 
-        <select value={edificio} onChange={(e) => setEdificio(e.target.value)}>
-          {SEDES[sede].edificios.map((ed) => (
-            <option key={ed} value={ed}>{ed}</option>
+        <select value={edificio} onChange={(e) => handleEdificioChange(e.target.value)}>
+          {Object.keys(SEDES[sede]?.edificios ?? {}).map((ed) => (
+            <option key={ed} value={ed}>
+              {ed}
+            </option>
           ))}
         </select>
 
-        <input type="number" min="1" value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="Capacidad" />
+        <select value={piso} onChange={(e) => setPiso(e.target.value)}>
+          {(SEDES[sede]?.edificios?.[edificio] ?? ["1"]).map((p) => (
+            <option key={p} value={String(p)}>
+              Piso {p}
+            </option>
+          ))}
+        </select>
 
-        <button type="submit">Crear sala</button>
+        <button type="submit">Crear locker</button>
       </form>
 
       <div className="table">
@@ -697,25 +693,23 @@ function RoomsView({ rooms, onAdd, onToggle }) {
           <div>Nombre</div>
           <div>Sede</div>
           <div>Edificio</div>
-          <div>Cap.</div>
+          <div>Piso</div>
           <div>Estado</div>
           <div>Acción</div>
         </div>
 
-        {rooms.map((r) => (
-          <div className="trow" key={r.id}>
-            <div>{r.id}</div>
-            <div>{r.name}</div>
-            <div>{SEDES[r.sede]?.label ?? r.sede}</div>
-            <div>{r.edificio}</div>
-            <div>{r.capacity}</div>
+        {lockers.map((l) => (
+          <div className="trow" key={l.id}>
+            <div>{l.id}</div>
+            <div>{l.name}</div>
+            <div>{SEDES[l.sede]?.label ?? l.sede}</div>
+            <div>{l.edificio}</div>
+            <div>{l.piso}</div>
             <div>
-              <span className={`pill ${r.active ? "CONFIRMADA" : "CANCELADA"}`}>
-                {r.active ? "ACTIVA" : "INACTIVA"}
-              </span>
+              <span className={`pill ${l.active ? "CONFIRMADA" : "CANCELADA"}`}>{l.active ? "ACTIVO" : "INACTIVO"}</span>
             </div>
             <div>
-              <button onClick={() => onToggle(r.id)}>{r.active ? "Desactivar" : "Activar"}</button>
+              <button onClick={() => onToggle(l.id)}>{l.active ? "Desactivar" : "Activar"}</button>
             </div>
           </div>
         ))}
@@ -724,9 +718,7 @@ function RoomsView({ rooms, onAdd, onToggle }) {
   );
 }
 
-/* Vista de configuración: exportar/importar backup JSON y reset total */
 function ConfigView({ onReset, onExport, onImport }) {
-  /* Vista de mantenimiento: backup y reset */
   return (
     <section className="card">
       <h2>Configuración</h2>
@@ -735,7 +727,7 @@ function ConfigView({ onReset, onExport, onImport }) {
       <div className="grid2">
         <div className="panel">
           <h3>Backup</h3>
-          <p className="muted">Exporta o importa salas y reservas.</p>
+          <p className="muted">Exporta o importa lockers y reservas.</p>
           <div className="row">
             <button onClick={onExport}>Exportar JSON</button>
             <label className="file">
@@ -748,7 +740,9 @@ function ConfigView({ onReset, onExport, onImport }) {
         <div className="panel">
           <h3>Reiniciar</h3>
           <p className="muted">Restablece valores por defecto.</p>
-          <button className="danger" onClick={onReset}>Reset total</button>
+          <button className="danger" onClick={onReset}>
+            Reset total
+          </button>
         </div>
       </div>
     </section>
